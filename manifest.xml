@@ -31,7 +31,7 @@
     <Form xsi:type="ItemRead">
       <DesktopSettings>
         <!-- 
-https://github.com/y-kuro-rgb/outlook-ai-analyzer.git
+https://y-kuro-rgb.github.io/outlook-ai-analyzer/taskpane.html
         -->
         <SourceLocation DefaultValue="https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO_NAME/taskpane.html" />
         <RequestedHeight>450</RequestedHeight>
@@ -46,4 +46,5 @@ https://github.com/y-kuro-rgb/outlook-ai-analyzer.git
   </Rule>
   
   <DisableEntityHighlighting>false</DisableEntityHighlighting>
+
 </OfficeApp>
