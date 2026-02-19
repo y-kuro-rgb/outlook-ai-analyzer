@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Email Guardian Pro</title>
+    <!-- Office.js SDK -->
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f8fafc; }
+        .fluent-card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; }
+        .progress-bar { transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="p-4 pb-10">
+    <div id="app" class="max-w-md mx-auto space-y-4">
+        <header class="flex items-center justify-between mb-2">
+            <h1 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                🛡️ AI Email Guardian
+            </h1>
+            <span id="status-badge" class="text-[10px] px-2 py-1 rounded-full bg-slate-200 font-bold">READY</span>
+        </header>
+
+        <!-- API Config Area -->
+        <div id="api-config" class="fluent-card p-4">
+            <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Gemini API Configuration</label>
+            <input type="password" id="api-key" class="w-full border p-2 rounded text-sm mb-2" placeholder="Gemini API Key...">
+            <button onclick="saveApiKey()" class="w-full bg-blue-600 text-white py-2 rounded text-sm font-bold hover:bg-blue-700 transition">
+                Set API Key
+            </button>
+        </div>
+
+        <!-- Main Action Button -->
+        <button id="analyze-button" onclick="fullEmailScan()" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:scale-[1.02] transition-transform active:scale-95 disabled:opacity-50">
+            <span id="button-text">Full Security Scan</span>
+            <div id="spinner" class="hidden animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+        </button>
+
+        <!-- Result Display Section -->
+        <div id="result-container" class="hidden space-y-4">
+            <!-- Risk Score Card -->
+            <div class="fluent-card p-6 text-center bg-gradient-to-br from-white to-slate-50">
+                <div class="flex justify-between text-xs font-bold text-slate-400 mb-4 uppercase">
+                    <span>Total Risk Score</span>
+                    <button onclick="speakAnalysis()" class="text-blue-600 flex items-center gap-1">
+                        🔊 Voice Summary
+                    </button>
+                </div>
+                <div class="text-5xl font-black mb-2" id="risk-score">0%</div>
+                <div class="w-full bg-slate-200 h-3 rounded-full overflow-hidden">
+                    <div id="risk-progress" class="progress-bar h-full bg-blue-500" style="width: 0%"></div>
+                </div>
+                <div id="risk-label" class="mt-3 text-sm font-bold uppercase tracking-widest">---</div>
+            </div>
+
+            <!-- AI Insights -->
+            <div class="space-y-3">
+                <div class="fluent-card p-4">
+                    <h3 class="text-xs font-black text-slate-400 mb-2 uppercase italic">AI Analysis Summary</h3>
+                    <p id="analysis-reason" class="text-sm text-slate-700 leading-relaxed"></p>
+                </div>
+
+                <!-- Detailed Checklist Items -->
+                <div id="check-list" class="grid grid-cols-1 gap-2">
+                    <div class="bg-white p-3 rounded-lg border flex items-center justify-between text-xs">
+                        <span class="text-slate-500 font-medium">Sender Identity</span>
+                        <span id="check-sender" class="font-bold">---</span>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border flex items-center justify-between text-xs">
+                        <span class="text-slate-500 font-medium">Links & URLs</span>
+                        <span id="check-links" class="font-bold">---</span>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border flex items-center justify-between text-xs">
+                        <span class="text-slate-500 font-medium">Attachments</span>
+                        <span id="check-attachments" class="font-bold">---</span>
+                    </div>
+                </div>
+
+                <!-- Safe Reply Draft Feature -->
+                <button onclick="generateSafeReply()" class="w-full py-3 text-xs bg-white border border-blue-200 text-blue-600 rounded-lg font-bold hover:bg-blue-50 transition">
+                    ✨ Generate Safety Reply Draft
+                </button>
+                <div id="reply-container" class="hidden p-4 bg-blue-50 border border-blue-100 rounded-lg text-xs text-slate-700 leading-relaxed relative">
+                    <div id="reply-text" class="italic"></div>
+                    <button onclick="copyToClipboard('reply-text')" class="mt-3 text-blue-600 font-bold underline">Copy Draft</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="error-box" class="hidden p-3 bg-red-100 border border-red-200 text-red-700 text-[10px] rounded"></div>
+    </div>
+
+    <script>
+        let apiKey = "";
+        let currentAnalysis = null;
+
+        // Initialize Office Add-in
+        Office.onReady((info) => {
+            const savedKey = sessionStorage.getItem("gemini_api_key");
+            if (savedKey) {
+                apiKey = savedKey;
+                document.getElementById('api-config').classList.add('hidden');
+            }
+        });
+
+        function saveApiKey() {
+            const val = document.getElementById('api-key').value;
+            if (val) {
+                apiKey = val;
+                sessionStorage.setItem("gemini_api_key", apiKey);
+                document.getElementById('api-config').classList.add('hidden');
+            }
+        }
+
+        async function fullEmailScan() {
+            if (!apiKey) return;
+            setLoading(true);
+            document.getElementById('result-container').classList.add('hidden');
+            document.getElementById('error-box').classList.add('hidden');
+
+            try {
+                const item = Office.context.mailbox.item;
+                
+                // Fetch email components
+                const headers = await new Promise(r => item.getAllHeadersAsync(res => r(res.value)));
+                const body = await new Promise(r => item.body.getAsync(Office.CoercionType.Text, res => r(res.value)));
+                
+                const meta = {
+                    subject: item.subject,
+                    from: item.from,
+                    to: item.to,
+                    attachments: item.attachments.map(a => ({ name: a.name, type: a.contentType, size: a.size })),
+                    bodyPreview: body.substring(0, 4000) // Context for AI
+                };
+
+                const analysis = await callGeminiAnalysis(headers, meta);
+                currentAnalysis = analysis;
+                renderResults(analysis);
+            } catch (err) {
+                showError("Scan failed: " + err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function callGeminiAnalysis(headers, meta) {
+            const prompt = `
+            Analyze this email for security threats (Phishing, BEC, Malicious Attachments).
+            [From]: ${meta.from.displayName} <${meta.from.emailAddress}>
+            [Subject]: ${meta.subject}
+            [Attachments]: ${JSON.stringify(meta.attachments)}
+            [Body]: ${meta.bodyPreview}
+            [Headers]: ${headers}
+
+            Analyze specifically:
+            1. Display name spoofing (e.g., name is CEO but email is external).
+            2. Suspicious tone/links in body.
+            3. Suspicious file extensions.
+            4. SPF/DKIM/DMARC status in headers.
+
+            Response JSON format:
+            {
+                "score": 0-100,
+                "label": "SAFE"|"SUSPICIOUS"|"DANGEROUS",
+                "reason": "Detailed Japanese summary",
+                "checks": { "sender": "OK/Warning", "links": "OK/Warning", "files": "OK/Warning" },
+                "speech_summary": "One sentence Japanese summary for TTS"
+            }
+            `;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const response = await fetchWithRetry(url, {
+                method: 'POST',
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
+            });
+            const data = await response.json();
+            return JSON.parse(data.candidates[0].content.parts[0].text);
+        }
+
+        async function speakAnalysis() {
+            if (!currentAnalysis?.speech_summary) return;
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+                const payload = {
+                    contents: [{ parts: [{ text: `Say calmly in Japanese: ${currentAnalysis.speech_summary}` }] }],
+                    generationConfig: {
+                        responseModalities: ["AUDIO"],
+                        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } }
+                    },
+                    model: "gemini-2.5-flash-preview-tts"
+                };
+                const res = await fetchWithRetry(url, payload);
+                const data = await res.json();
+                const pcm = data.candidates[0].content.parts[0].inlineData.data;
+                playAudio(pcm);
+            } catch (e) { showError("TTS failed"); }
+        }
+
+        async function generateSafeReply() {
+            if (!currentAnalysis) return;
+            const prompt = `Based on this threat level (${currentAnalysis.label}), write a short, polite Japanese reply draft to verify the sender's identity safely without clicking links. Text only.`;
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                const res = await fetch(url + `&key=${apiKey}`, {
+                    method: 'POST',
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const data = await res.json();
+                document.getElementById('reply-text').innerText = data.candidates[0].content.parts[0].text;
+                document.getElementById('reply-container').classList.remove('hidden');
+            } catch (e) { showError("Reply generation failed"); }
+        }
+
+        // Utils
+        async function fetchWithRetry(url, payload, retries = 5) {
+            for (let i = 0; i < retries; i++) {
+                const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
+                if (res.ok) return res;
+                await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+            }
+            throw new Error("API persistent error");
+        }
+
+        function playAudio(base64Pcm) {
+            const pcmBuffer = Uint8Array.from(atob(base64Pcm), c => c.charCodeAt(0)).buffer;
+            const wavHeader = new ArrayBuffer(44);
+            const view = new DataView(wavHeader);
+            view.setUint32(0, 0x46464952, true); // RIFF
+            view.setUint32(4, 36 + pcmBuffer.byteLength, true);
+            view.setUint32(8, 0x45564157, true); // WAVE
+            view.setUint32(12, 0x20746d66, true); // fmt 
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true); // PCM
+            view.setUint16(22, 1, true); // Mono
+            view.setUint32(24, 24000, true); // Sample Rate
+            view.setUint32(28, 48000, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            view.setUint32(36, 0x61746164, true); // data
+            view.setUint32(40, pcmBuffer.byteLength, true);
+            const blob = new Blob([wavHeader, pcmBuffer], { type: 'audio/wav' });
+            new Audio(URL.createObjectURL(blob)).play();
+        }
+
+        function renderResults(data) {
+            document.getElementById('result-container').classList.remove('hidden');
+            document.getElementById('risk-score').innerText = `${data.score}%`;
+            document.getElementById('risk-progress').style.width = `${data.score}%`;
+            
+            const labelEl = document.getElementById('risk-label');
+            labelEl.innerText = data.label;
+            const color = data.score > 70 ? 'text-red-600' : data.score > 30 ? 'text-yellow-600' : 'text-green-600';
+            labelEl.className = `mt-3 text-sm font-bold uppercase tracking-widest ${color}`;
+            
+            document.getElementById('analysis-reason').innerText = data.reason;
+            document.getElementById('check-sender').innerText = data.checks.sender;
+            document.getElementById('check-links').innerText = data.checks.links;
+            document.getElementById('check-attachments').innerText = data.checks.files;
+        }
+
+        function setLoading(loading) {
+            const btn = document.getElementById('analyze-button');
+            const spinner = document.getElementById('spinner');
+            btn.disabled = loading;
+            if(loading) {
+                spinner.classList.remove('hidden');
+                document.getElementById('button-text').innerText = "Analyzing...";
+                document.getElementById('status-badge').className = "text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold animate-pulse";
+                document.getElementById('status-badge').innerText = "SCANNING";
+            } else {
+                spinner.classList.add('hidden');
+                document.getElementById('button-text').innerText = "Full Security Scan";
+                document.getElementById('status-badge').className = "text-[10px] px-2 py-1 rounded-full bg-green-100 text-green-700 font-bold";
+                document.getElementById('status-badge').innerText = "COMPLETED";
+            }
+        }
+
+        function showError(msg) {
+            const box = document.getElementById('error-box');
+            box.innerText = msg;
+            box.classList.remove('hidden');
+        }
+
+        function copyToClipboard(id) {
+            const text = document.getElementById(id).innerText;
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OfficeApp 
+    xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" 
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+    xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" 
+    xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0" 
+    xsi:type="MailApp">
+  <!-- IDはアドインを識別する一意のコードです -->
+  <Id>5e8b7d41-3a1e-4f7c-9b1b-2d3e4f5a6b7c</Id>
+  <Version>1.0.0.3</Version>
+  <ProviderName>AI Security Lab</ProviderName>
+  <DefaultLocale>ja-JP</DefaultLocale>
+  <DisplayName DefaultValue="AI Email Guardian Pro" />
+  <Description DefaultValue="AIによるメールの多角的リスク分析（ヘッダー、本文、添付ファイル、リンク）" />
+  
+  <!-- アイコン画像（デフォルトのサンプル画像を指定しています） -->
+  <IconUrl DefaultValue="https://res-1.cdn.office.net/assets/mail/pwa/v1/pngs/apple-touch-icon.png" />
+  <HighResolutionIconUrl DefaultValue="https://res-1.cdn.office.net/assets/mail/pwa/v1/pngs/apple-touch-icon.png" />
+  
+  <Hosts>
+    <Host Name="Mailbox" />
+  </Hosts>
+  
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.1" />
+    </Sets>
+  </Requirements>
+  
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <!-- 
+https://github.com/y-kuro-rgb/outlook-ai-analyzer.git
+        -->
+        <SourceLocation DefaultValue="https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO_NAME/taskpane.html" />
+        <RequestedHeight>450</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+  
+  <Permissions>ReadItem</Permissions>
+  
+  <Rule xsi:type="RuleCollection" Mode="And">
+    <Rule xsi:type="ItemIs" ItemType="Message" />
+  </Rule>
+  
+  <DisableEntityHighlighting>false</DisableEntityHighlighting>
+</OfficeApp>
